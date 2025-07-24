@@ -1,0 +1,32 @@
+<!-- This is the main HTML file for the issuing institution's credential interface. -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Set the character encoding for the document -->
+    <meta charset="UTF-8" />
+    <!-- Set the viewport to ensure responsiveness on all devices -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Set the page title -->
+    <title>Woedufy - Issue Credential</title>
+    <!-- Link to the external CSS file for styling -->
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  </head>
+  <body>
+    <!-- Main container to center and wrap the content -->
+    <div class="container">
+      <!-- Heading for the page -->
+      <h1>Issue Credential</h1>
+      <!-- File input for selecting the credential file to upload -->
+      <input type="file" id="credentialFile" accept="*/*" />
+      <!-- Button to trigger the credential issuing process -->
+      <button id="issueBtn">Issue Credential</button>
+      <!-- Paragraph to display status messages to the user -->
+      <p id="status"></p>
+    </div>
+    <!-- Include ethers.js from a CDN for blockchain interactions -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <!-- Link to the external JavaScript file for UI logic -->
+    <script src="js/institution.js"></script>
+  </body>
+</html>
