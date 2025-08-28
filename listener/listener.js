@@ -1,50 +1,17 @@
+// SPDX-License-Identifier: UNLICENSED
+// listener.js - Final Polling Version with State Management
+
 require("dotenv").config();
 const { ethers } = require("ethers");
-const { getSignedVaa } = require("@wormhole-foundation/sdk");
 const fetch = require("node-fetch");
 
-// Set the Wormhole chain ID for Ethereum/Sepolia manually
-const CHAIN_ID_ETHEREUM = 2;
+// --- Configuration ---
+const WORMHOLE_CHAIN_ID_SEPOLIA = 10002;
+const ISSUER_ADDRESS = "0x50d71584A91daEE2Fdc389ea755A98b9b581EC74";
+const MIRROR_ADDRESS = "0x671BedE495cC58a39F2d411677A9384B375B83Fd";
 
-// Local helper for emitter address (Ethereum): left-pad 20 bytes to 32 bytes as hex string
-function getEmitterAddressEth(address) {
-  const addr = address.toLowerCase().replace(/^0x/, "");
-  return "0".repeat(24) + addr;
-}
-
-// Wormhole Core Bridge address on Sepolia
-const WORMHOLE_CORE_SEPOLIA = "0x4a8bc80ed5a4067f1ccf107057b8270e0cc11a78";
-
-/**
- * Extracts the Wormhole message sequence from a transaction receipt.
- * It specifically looks for the 'LogMessagePublished' event from the Core Bridge.
- */
-function getSequenceFromReceipt(receipt) {
-  // The unique signature (topic) for the LogMessagePublished event.
-  const LOG_MESSAGE_PUBLISHED_TOPIC =
-    "0x6eb224fb001ed210e379b335e35efe88672a8ce935d981a6896b27ffdf52a3b2";
-
-  // Find the specific log for the LogMessagePublished event.
-  const coreLog = receipt.logs.find(
-    (l) =>
-      l.address.toLowerCase() === WORMHOLE_CORE_SEPOLIA.toLowerCase() &&
-      l.topics[0].toLowerCase() === LOG_MESSAGE_PUBLISHED_TOPIC
-  );
-
-  if (!coreLog) {
-    throw new Error(
-      "LogMessagePublished event not found in transaction receipt"
-    );
-  }
-
-  // The sequence number is the first non-indexed field in the log data.
-  // It's a uint64, but it's padded to a full 32-byte word (64 hex characters).
-  const sequenceHex = coreLog.data.substring(0, 66); // "0x" + 64 hex chars
-  return BigInt(sequenceHex);
-}
-
+// --- ABIs ---
 const ISSUER_ABI = [
-  // ... (keep the LogCredentialIssued event here)
   {
     type: "event",
     name: "CrossChainMessageEmitted",
@@ -54,148 +21,188 @@ const ISSUER_ABI = [
 ];
 const MIRROR_ABI = [
   {
-    inputs: [{ internalType: "bytes", name: "_vaa", type: "bytes" }],
+    type: "function",
     name: "receiveAndVerifyVAA",
+    inputs: [{ name: "_vaa", type: "bytes" }],
     outputs: [],
     stateMutability: "nonpayable",
-    type: "function",
   },
 ];
 
-async function fetchVAA(chainId, emitterAddress, sequence) {
-  const url = `https://api.testnet.wormholescan.io/api/v1/signed_vaa/${chainId}/${emitterAddress}/${sequence}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("VAA not found");
-  const data = await response.json();
-  if (!data.vaaBytes) throw new Error("VAA not found in response");
-  return Buffer.from(data.vaaBytes, "base64");
+// --- Helper Functions ---
+
+function getEmitterAddressEth(address) {
+  return "0x" + address.slice(2).padStart(64, "0");
 }
 
-async function fetchVAAWithRetry(
-  chainId,
-  emitterAddress,
-  sequence,
-  maxAttempts = 10,
-  delayMs = 60000
-) {
+async function fetchVAAWithRetry(chainId, emitterAddress, sequence) {
+  const vaaUrl = `https://api.testnet.wormholescan.io/api/v1/vaas/${chainId}/${emitterAddress.slice(
+    2
+  )}/${sequence}`;
+  const maxAttempts = 60; // 30 minutes total timeout
+  const delayMs = 30000; // 30 seconds
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    console.log(
+      `\n📡 Fetching VAA for sequence ${sequence}... (Attempt ${attempt}/${maxAttempts})`
+    );
     try {
-      const vaa = await fetchVAA(chainId, emitterAddress, sequence);
-      return vaa;
+      const response = await fetch(vaaUrl);
+      if (!response.ok) throw new Error(`API status: ${response.status}`);
+      const data = await response.json();
+      if (data && data.data && data.data.vaa) {
+        return Buffer.from(data.data.vaa, "base64");
+      }
+      throw new Error("VAA not yet available in API response.");
     } catch (e) {
-      if (attempt === maxAttempts) throw e;
-      console.log(
-        `VAA not found, retrying in ${
-          delayMs / 1000
-        }s... (attempt ${attempt}/${maxAttempts})`
-      );
+      if (attempt === maxAttempts) {
+        throw new Error(
+          `Failed to fetch VAA after ${maxAttempts} attempts: ${e.message}`
+        );
+      }
+      console.log(`   Retrying in ${delayMs / 1000}s...`);
       await new Promise((res) => setTimeout(res, delayMs));
     }
   }
 }
 
-// --- Main application logic is now in this function ---
-function runListener() {
+async function relayVAA(vaaBytes, mirrorContract, sequence) {
+  const vaaHex = "0x" + vaaBytes.toString("hex");
+  console.log(
+    `\n✅ VAA fetched for sequence ${sequence}! Submitting to Mirror contract...`
+  );
+
+  try {
+    const tx = await mirrorContract.receiveAndVerifyVAA(vaaHex);
+    console.log(
+      `⏳ Waiting for transaction confirmation for sequence ${sequence} on Amoy...`
+    );
+
+    const receipt = await tx.wait();
+    console.log(
+      `\n✅🎉 Successfully mirrored credential for sequence ${sequence} to Amoy!`
+    );
+    console.log(`[END] Polygon Tx Confirmed: ${new Date().toISOString()}`);
+    console.log(`   - Amoy Tx Hash: ${receipt.hash}`);
+    return true; // Indicate success
+  } catch (error) {
+    // This is not a real error, it just means another instance of the listener succeeded first.
+    if (
+      error.message.includes("already known") ||
+      error.message.includes("VAA already processed")
+    ) {
+      console.log(
+        `\n✅ Sequence ${sequence} was already relayed by another process.`
+      );
+      return true; // Indicate success
+    }
+    // This is a real error
+    console.error(
+      `\n❌ An error occurred during the relay for sequence ${sequence}:`
+    );
+    console.error(error.message);
+    return false; // Indicate failure
+  }
+}
+
+// --- Main Application ---
+
+async function main() {
   console.log("🚀 Starting VAA listener for manual relay...");
 
-  const sepoliaProvider = new ethers.WebSocketProvider(
+  const sepoliaProvider = new ethers.JsonRpcProvider(
     process.env.SEPOLIA_RPC_URL
   );
-  const amoyProvider = new ethers.WebSocketProvider(process.env.AMOY_RPC_URL);
+  const amoyProvider = new ethers.JsonRpcProvider(process.env.AMOY_RPC_URL);
   const amoyWallet = new ethers.Wallet(
     process.env.PRIVATE_KEY_AMOY,
     amoyProvider
   );
 
   const issuerContract = new ethers.Contract(
-    process.env.ISSUER_ADDRESS,
+    ISSUER_ADDRESS,
     ISSUER_ABI,
     sepoliaProvider
   );
   const mirrorContract = new ethers.Contract(
-    process.env.MIRROR_ADDRESS,
+    MIRROR_ADDRESS,
     MIRROR_ABI,
     amoyWallet
   );
 
+  console.log(`📡 Polling for events on Issuer contract: ${ISSUER_ADDRESS}`);
+  console.log(`🪞 Mirror contract on Amoy: ${MIRROR_ADDRESS}`);
+
+  let lastCheckedBlock = await sepoliaProvider.getBlockNumber();
+  const currentlyProcessing = new Set(); // This will prevent duplicate processing
+
   console.log(
-    `📡 Listening for events on Issuer contract: ${process.env.ISSUER_ADDRESS}`
+    `✅ Listener active. Starting scan from block ${lastCheckedBlock}.`
   );
-  console.log(`🪞 Mirror contract on Amoy: ${process.env.MIRROR_ADDRESS}`);
 
-  // --- FINAL LISTENER LOGIC ---
-
-  // Listen for the event that gives us the sequence number directly
-  issuerContract.on("CrossChainMessageEmitted", async (sequence, event) => {
-    const txHash = event.log.transactionHash;
-
-    console.log("\n✅ Cross-Chain Message Published on Sepolia!");
-    console.log(`   • Sequence:   ${sequence.toString()}`);
-    console.log(`   • Sepolia tx: ${txHash}`);
-
+  const pollAndReschedule = async () => {
     try {
-      // The emitter address is your Issuer contract address, padded to 32 bytes
-      const emitterAddress = getEmitterAddressEth(issuerContract.target);
+      const latestBlock = await sepoliaProvider.getBlockNumber();
+      const fromBlock = lastCheckedBlock + 1;
 
-      console.log("📡 Fetching VAA from Wormhole RPC…");
+      if (latestBlock >= fromBlock) {
+        const events = await issuerContract.queryFilter(
+          "CrossChainMessageEmitted",
+          fromBlock,
+          latestBlock
+        );
 
-      const vaaBytes = await fetchVAAWithRetry(
-        CHAIN_ID_ETHEREUM,
-        emitterAddress,
-        sequence.toString()
-      );
+        if (events.length > 0) {
+          console.log(`\nFound ${events.length} new event(s)...`);
+          for (const event of events) {
+            const { sequence } = event.args;
+            const sequenceId = sequence.toString();
 
-      const vaaHex = "0x" + vaaBytes.toString("hex");
-      console.log("✅ VAA fetched successfully!");
-      console.log("Submitting VAA to Mirror contract on Amoy...");
+            if (!currentlyProcessing.has(sequenceId)) {
+              currentlyProcessing.add(sequenceId);
+              try {
+                console.log("\n✅ Processing New Cross-Chain Message!");
+                console.log(`   • Sequence:   ${sequenceId}`);
+                console.log(`   • Sepolia tx: ${event.transactionHash}`);
 
-      const tx = await mirrorContract.receiveAndVerifyVAA(vaaHex);
-
-      console.log("⏳ Waiting for transaction confirmation on Amoy...");
-      const receiptPoly = await tx.wait();
-
-      console.log("✅🎉 Successfully mirrored credential to Amoy!");
-      console.log(`   - Amoy Tx Hash: ${receiptPoly.transactionHash}`);
+                const vaaBytes = await fetchVAAWithRetry(
+                  WORMHOLE_CHAIN_ID_SEPOLIA,
+                  getEmitterAddressEth(issuerContract.target),
+                  sequenceId
+                );
+                await relayVAA(vaaBytes, mirrorContract, sequenceId);
+              } catch (error) {
+                console.error(
+                  `A critical error occurred processing sequence ${sequenceId}:`,
+                  error.message
+                );
+              } finally {
+                currentlyProcessing.delete(sequenceId);
+              }
+            }
+          }
+        }
+        lastCheckedBlock = latestBlock;
+      }
     } catch (error) {
       console.error(
-        "❌ An error occurred during the relay process:",
+        "An error occurred during the polling cycle:",
         error.message
       );
-    }
-  });
-
-  // --- END OF FINAL LISTENER LOGIC ---
-
-  // We add a listener for connection errors on the provider
-  sepoliaProvider.on("error", (error) => {
-    console.error(
-      "Provider error detected, will attempt to restart listener:",
-      error
-    );
-    // When an error occurs, we throw it to trigger the catch block below
-    throw error;
-  });
-
-  console.log("✅ Listener is now active and waiting for events...");
-}
-
-// --- This new block manages the listener's lifecycle ---
-async function startApp() {
-  while (true) {
-    try {
-      runListener();
-      // Keep the script running
-      await new Promise(() => {});
-    } catch (error) {
-      console.error(
-        "Listener crashed with a connection error. Restarting in 10 seconds...",
-        error.message
+    } finally {
+      // Always reschedule the next poll, even if an error occurred.
+      setTimeout(pollAndReschedule, 30000);
+      console.log(
+        `\n...waiting for next poll in 30s. Last checked block: ${lastCheckedBlock}`
       );
-      // Wait for 10 seconds before restarting
-      await new Promise((resolve) => setTimeout(resolve, 10000));
     }
-  }
+  };
+
+  // Start the first poll
+  pollAndReschedule();
 }
 
-// Start the application
-startApp();
+main().catch((error) => {
+  console.error("A critical error occurred in the main process:", error);
+  process.exit(1);
+});

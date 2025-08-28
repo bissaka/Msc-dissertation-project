@@ -47,7 +47,15 @@
     </div>
     <!-- Include ethers.js from a CDN for blockchain interactions -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <!-- Load shared constants as a module -->
+    <script type="module" src="js/constants.js"></script>
+    <!-- Load blockchain functions as a module -->
+    <script type="module" src="js/blockchain.js"></script>
+    <!-- Load services as a module -->
+    <script type="module" src="js/services.js"></script>
+    <!-- Load UI functions as a module -->
+    <script type="module" src="js/ui.js"></script>
     <!-- Link to the external JavaScript file for UI logic -->
-    <script src="js/verifier.js"></script>
+    <script type="module" src="js/verifier.js"></script>
   </body>
 </html>

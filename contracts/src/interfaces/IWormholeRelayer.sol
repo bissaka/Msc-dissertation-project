@@ -47,4 +47,11 @@ interface IWormholeRelayer {
      * @return The delivery hash.
      */
     function getDeliveryHash(uint16 sourceChain, bytes32 sourceAddress, uint64 sequence) external view returns (bytes32);
+
+    function quoteEVMDeliveryPrice(
+        uint16 targetChain,
+        uint256 receiverValue,
+        uint256 gasLimit,
+        address deliveryProvider
+    ) external view returns (uint256 nativeFee, uint256 relayerFee);
 } 

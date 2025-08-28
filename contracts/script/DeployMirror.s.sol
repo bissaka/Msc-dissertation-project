@@ -5,21 +5,16 @@ import "../src/Mirror.sol";
 
 contract DeployMirror is Script {
     function run() external {
-        // CORRECTED: The Amoy RELAYER address you provided.
-        address wormholeRelayer = 0x362fca37E45fe1096b42021b543f462D49a5C8df;
-        
-        // The source chain is Sepolia
-        uint16 sourceChainId = 2; 
-
+        // Use the official Amoy Core Contract address
+        address wormholeCoreBridge = 0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35; // [cite: 3]
         address issuerContractOnSepolia = vm.envAddress("ISSUER_ADDRESS");
 
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_AMOY");
+        address deployerAddress = vm.addr(deployerPrivateKey);
+        
         vm.startBroadcast(deployerPrivateKey);
-        
-        // Pass all three arguments to the constructor
-        Mirror mirror = new Mirror(wormholeRelayer, sourceChainId, issuerContractOnSepolia);
-        
+        Mirror mirror = new Mirror(wormholeCoreBridge, issuerContractOnSepolia, deployerAddress);
         vm.stopBroadcast();
-        console.log(" Mirror contract deployed to:", address(mirror));
+        console.log(" Manual Mirror contract deployed to:", address(mirror));
     }
 }

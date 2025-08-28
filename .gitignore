@@ -1,15 +1,26 @@
-# Compiler files
-cache/
-out/
+# Secret Environment Variables - CRITICAL
+**/.env
 
-# Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+# Python Virtual Environment
+/venv/
 
-# Docs
-docs/
+# Node.js Dependencies
+**/node_modules/
 
-# Dotenv file
-.env
-node_modules/
+# Foundry Dependencies
+/contracts/lib/
+
+# Foundry Build & Cache Artifacts
+/contracts/cache/
+/contracts/out/
+/contracts/broadcast/
+
+# Generated Reports
+**/*-report.txt
+
+# VS Code Editor Folder
+/.vscode/
+
+# OS-specific files
+.DS_Store
+Thumbs.db

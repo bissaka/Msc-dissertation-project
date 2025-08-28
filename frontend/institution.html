@@ -17,16 +17,27 @@
     <div class="container">
       <!-- Heading for the page -->
       <h1>Issue Credential</h1>
-      <!-- File input for selecting the credential file to upload -->
-      <input type="file" id="credentialFile" accept="*/*" />
-      <!-- Button to trigger the credential issuing process -->
-      <button id="issueBtn">Issue Credential</button>
+      <!-- File input for selecting the credential file(s) to upload -->
+      <input type="file" id="credentialFile" accept="*/*" multiple />
+      <!-- Buttons to trigger the credential issuing process -->
+      <div style="margin-top: 16px;">
+        <button id="issueBtn">Issue Single Credential</button>
+        <button id="batchIssueBtn" style="margin-left: 8px;">Issue Batch of Credentials</button>
+      </div>
       <!-- Paragraph to display status messages to the user -->
       <p id="status"></p>
     </div>
     <!-- Include ethers.js from a CDN for blockchain interactions -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <!-- Load shared constants as a module -->
+    <script type="module" src="js/constants.js"></script>
+    <!-- Load blockchain functions as a module -->
+    <script type="module" src="js/blockchain.js"></script>
+    <!-- Load services as a module -->
+    <script type="module" src="js/services.js"></script>
+    <!-- Load UI functions as a module -->
+    <script type="module" src="js/ui.js"></script>
     <!-- Link to the external JavaScript file for UI logic -->
-    <script src="js/institution.js"></script>
+    <script type="module" src="js/institution.js"></script>
   </body>
 </html>

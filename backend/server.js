@@ -6,9 +6,7 @@ const multer = require("multer");
 const cors = require("cors");
 // I'm importing the 'dotenv' module to load my secret API keys from the .env file.
 require("dotenv").config();
-// I'm adding these lines to debug and see what variables are being loaded.
-console.log("Pinata API Key Loaded:", process.env.PINATA_API_KEY);
-console.log("Pinata Secret Key Loaded:", process.env.PINATA_API_SECRET);
+
 // I'm importing the Pinata SDK, which provides easy-to-use functions for interacting with the Pinata IPFS service.
 const pinataSDK = require("@pinata/sdk");
 // I'm importing the built-in 'stream' module, which I need to handle the file data.
@@ -19,8 +17,23 @@ const app = express();
 // I'm defining the port number for my server, using the one from my .env file or defaulting to 3000.
 const PORT = process.env.PORT || 3000;
 
-// I'm telling my Express app to use the CORS middleware. This is crucial for allowing browser requests.
-app.use(cors());
+// I'm configuring CORS to only allow requests from the specific frontend origin
+// This improves security by preventing requests from unauthorized origins
+const corsOptions = {
+  origin: [
+    "http://127.0.0.1:5500", // Live Server default
+    "http://localhost:5500", // Live Server alternative
+    "http://127.0.0.1:3000", // If serving frontend on port 3000
+    "http://localhost:3000", // If serving frontend on port 3000
+    "file://", // Allow file:// protocol for local development
+    "http://127.0.0.1:5641",
+  ],
+  credentials: true, // Allow credentials if needed
+  optionsSuccessStatus: 200, // Some legacy browsers choke on 204
+};
+
+// I'm telling my Express app to use the CORS middleware with restricted origins.
+app.use(cors(corsOptions));
 
 // I'm setting up Multer to store uploaded files in memory as a buffer, rather than saving them to disk.
 const storage = multer.memoryStorage();
@@ -76,4 +89,5 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 app.listen(PORT, () => {
   // Once the server is running, I'm logging a confirmation message to the console.
   console.log(`Server is running on port ${PORT}`);
+  console.log(`CORS enabled for origins: ${corsOptions.origin.join(", ")}`);
 });

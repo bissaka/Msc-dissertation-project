@@ -5,21 +5,14 @@ import "../src/Issuer.sol";
 
 contract DeployIssuer is Script {
     function run() external {
-        // Sepolia RELAYER address
-        address wormholeRelayer = 0x7B1bD7a6b4E61c2a123AC6BC2cbfC614437D0470;
-        
-        // CORRECTED: Define the targetChainId
-        uint16 targetChainId = 5; // Wormhole Chain ID for Amoy/Polygon
-
+        // Use the official Sepolia Core Contract address
+        address wormholeCoreBridge = 0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78; // [cite: 2]
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_SEPOLIA");
         address deployerAddress = vm.addr(deployerPrivateKey);
 
         vm.startBroadcast(deployerPrivateKey);
-        
-        // CORRECTED: Pass all three arguments to the constructor
-        Issuer issuer = new Issuer(wormholeRelayer, targetChainId, deployerAddress);
-        
+        Issuer issuer = new Issuer(wormholeCoreBridge, deployerAddress);
         vm.stopBroadcast();
-        console.log(" Issuer contract deployed to:", address(issuer));
+        console.log(" Manual Issuer contract deployed to:", address(issuer));
     }
 }

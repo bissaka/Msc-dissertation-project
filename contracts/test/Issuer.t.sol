@@ -1,82 +1,372 @@
 // SPDX-License-Identifier: MIT
-// I'm defining the license for this test contract.
 pragma solidity ^0.8.20;
-// I'm specifying the Solidity compiler version.
 
-// I'm importing the Foundry Test base contract, which provides useful testing utilities.
 import "forge-std/Test.sol";
-// I'm importing the updated Issuer contract that I want to test.
 import "../src/Issuer.sol";
+import "../src/interfaces/IWormhole.sol";
 
-/**
- * @title IssuerTest
- * @author Oludoyi Olumide Joshua
- * @notice This is my updated test suite for the revised Issuer.sol contract.
- * I'm testing the new CID-centric logic and security features.
- */
 contract IssuerTest is Test {
-    // I'm declaring a state variable to hold the instance of the Issuer contract.
-    Issuer private issuer;
+    Issuer public issuer;
+    address public wormholeCoreBridge;
+    address public owner;
+    address public user;
+    address public nonOwner;
 
-    // I'm declaring an address variable to simulate an institution (issuer).
-    address private issuer1 = address(0x1);
+    // Test data
+    string public constant TEST_CID = "QmExampleCID123456789";
+    string public constant TEST_CID_2 = "QmExampleCID987654321";
+    string public constant TEST_CID_3 = "QmExampleCID555666777";
 
-    /**
-     * @notice This is my setup function, which runs before each test.
-     * It deploys a fresh contract instance to ensure my tests are isolated.
-     */
+    // NEW: Test content hashes
+    bytes32 public constant TEST_CONTENT_HASH = keccak256("file1_content");
+    bytes32 public constant TEST_CONTENT_HASH_2 = keccak256("file2_content");
+    bytes32 public constant TEST_CONTENT_HASH_3 = keccak256("file3_content");
+
+    event LogCredentialIssued(address indexed issuer, string cid, bytes32 indexed cidHash);
+    event CrossChainMessageEmitted(uint64 sequence);
+    event CredentialRevoked(bytes32 indexed cidHash);
+
     function setUp() public {
-        // I'm creating and deploying a brand new instance of the Issuer contract.
-        issuer = new Issuer();
+        // Setup addresses
+        owner = address(this);
+        user = makeAddr("user");
+        nonOwner = makeAddr("nonOwner");
+        
+        // Mock Wormhole Core Bridge address
+        wormholeCoreBridge = makeAddr("wormholeCoreBridge");
+        
+        // Deploy the Issuer contract
+        issuer = new Issuer(wormholeCoreBridge, owner);
+        
+        // Give some ETH to the user for testing
+        vm.deal(user, 100 ether);
+        vm.deal(nonOwner, 100 ether);
     }
 
-    /**
-     * @notice I'm testing the core function to ensure it stores the issuer's address against the CID hash.
-     * This test also checks that the correct event is emitted.
-     */
-    function test_issueCredential_storesIssuerAddressAndEmitsEvent() public {
-        // I'm defining a sample IPFS CID that I'll use for this test.
-        string memory testCID = "QmTestCID1234567890";
-        // I'm calculating the hash of the CID, just like the smart contract does.
-        bytes32 cidHash = keccak256(abi.encodePacked(testCID));
-
-        // I'm telling the test runner to expect my updated event signature in the next call.
-        vm.expectEmit(true, true, true, true);
-        // I'm defining the event I expect, which now includes the issuer, CID, and the hash of the CID.
-        emit issuer.LogCredentialIssued(issuer1, testCID, cidHash);
-
-        // I'm using vm.prank to simulate the transaction being sent from issuer1's address.
-        vm.prank(issuer1);
-        // I'm calling the issueCredential function with my test CID.
-        issuer.issueCredential(testCID);
-
-        // I'm retrieving the stored issuer address by calling the public 'cidIssuer' mapping with the hash.
-        address storedIssuer = issuer.cidIssuer(cidHash);
-        // I'm asserting that the address stored in the mapping is the address of issuer1.
-        assertEq(storedIssuer, issuer1, "The issuer address should be stored correctly.");
+    // Mock Wormhole Core Bridge for testing
+    function mockWormholeMessageFee() internal pure returns (uint256) {
+        return 0.001 ether; // Mock fee of 0.001 ETH
     }
 
-    /**
-     * @notice I'm testing the new security feature: the contract must reject duplicate CIDs.
-     * This test ensures the same credential cannot be issued twice.
-     */
-    function test_reverts_whenIssuingDuplicateCID() public {
-        // I'm defining a sample IPFS CID.
-        string memory testCID = "QmTestCID1234567890";
-
-        // --- First Issuance ---
-        // I'm simulating the first issuance from issuer1.
-        vm.prank(issuer1);
-        // I'm calling the function, which should succeed.
-        issuer.issueCredential(testCID);
-
-        // --- Second Issuance Attempt ---
-        // I'm telling the test runner to expect the transaction to fail (revert).
-        // I'm providing the exact error message I expect from the 'require' statement in my contract.
-        vm.expectRevert(bytes("Issuer: This credential CID has already been issued."));
-        // I'm simulating another user trying to issue the EXACT same CID, which should be blocked.
-        vm.prank(address(0x2));
-        // I'm calling the function again with the same CID, which should trigger the revert.
-        issuer.issueCredential(testCID);
+    function test_issueSingleCredential() public {
+        // Start acting as the user
+        vm.startPrank(user);
+        
+        // Calculate the expected CID hash
+        bytes32 expectedCidHash = keccak256(abi.encodePacked(TEST_CID));
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1)) // Mock sequence number
+        );
+        
+        // Issue the credential
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+        
+        // Verify the credential was issued correctly
+        assertEq(issuer.cidIssuer(expectedCidHash), user, "CID issuer should be set to user");
+        assertFalse(issuer.isRevoked(expectedCidHash), "Credential should not be revoked");
+        assertTrue(issuer.contentHashIssued(TEST_CONTENT_HASH), "Content hash should be marked as issued");
+        
+        vm.stopPrank();
     }
-}
+
+    function test_batchIssueCredentials() public {
+        // Start acting as the user
+        vm.startPrank(user);
+        
+        // Prepare test CIDs
+        string[] memory cids = new string[](3);
+        cids[0] = TEST_CID;
+        cids[1] = TEST_CID_2;
+        cids[2] = TEST_CID_3;
+
+        bytes32[] memory contentHashes = new bytes32[](3);
+        contentHashes[0] = TEST_CONTENT_HASH;
+        contentHashes[1] = TEST_CONTENT_HASH_2;
+        contentHashes[2] = TEST_CONTENT_HASH_3;
+        
+        // Calculate expected CID hashes
+        bytes32[] memory expectedCidHashes = new bytes32[](3);
+        expectedCidHashes[0] = keccak256(abi.encodePacked(TEST_CID));
+        expectedCidHashes[1] = keccak256(abi.encodePacked(TEST_CID_2));
+        expectedCidHashes[2] = keccak256(abi.encodePacked(TEST_CID_3));
+        
+        // Mock the wormhole message fee
+        uint256 messageFee = mockWormholeMessageFee();
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(messageFee)
+        );
+        
+        // Mock the publishMessage call for each credential
+        for (uint256 i = 0; i < 3; i++) {
+            vm.mockCall(
+                wormholeCoreBridge,
+                abi.encodeWithSelector(IWormhole.publishMessage.selector),
+                abi.encode(uint64(i + 1)) // Mock sequence numbers
+            );
+        }
+        
+        // Issue credentials in batch
+        issuer.batchIssueCredentials{value: messageFee * 3}(cids, contentHashes);
+        
+        // Verify all credentials were issued correctly
+        for (uint256 i = 0; i < 3; i++) {
+            assertEq(
+                issuer.cidIssuer(expectedCidHashes[i]), 
+                user, 
+                "CID issuer should be set to user"
+            );
+            assertFalse(
+                issuer.isRevoked(expectedCidHashes[i]), 
+                "Credential should not be revoked"
+            );
+            assertTrue(issuer.contentHashIssued(contentHashes[i]));
+        }
+        
+        vm.stopPrank();
+    }
+
+    function test_fail_issueDuplicateCredential() public {
+        // Start acting as the user
+        vm.startPrank(user);
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1))
+        );
+        
+        // Issue the credential first time
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+        
+        // Try to issue the same credential again with a DIFFERENT content hash - should revert
+        vm.expectRevert("Credential already issued for this CID");
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH_2); // This line is changed
+        
+        vm.stopPrank();
+    }
+
+    // NEW TEST: Verify the duplicate content hash prevention
+    function test_fail_issueDuplicateContentHash() public {
+        vm.startPrank(user);
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1))
+        );
+
+        // Issue the credential first time
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+
+        // Try to issue a new CID with the same content hash - should revert
+        vm.expectRevert("Credential for this content already issued");
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID_2, TEST_CONTENT_HASH);
+        vm.stopPrank();
+    }
+
+    function test_revokeCredential() public {
+        // First, issue a credential as the user
+        vm.startPrank(user);
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1))
+        );
+        
+        // Issue the credential
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+        vm.stopPrank();
+        
+        // Calculate the CID hash
+        bytes32 cidHash = keccak256(abi.encodePacked(TEST_CID));
+        
+        // Verify the credential exists and is not revoked
+        assertEq(issuer.cidIssuer(cidHash), user, "Credential should exist");
+        assertFalse(issuer.isRevoked(cidHash), "Credential should not be revoked initially");
+        
+        // Now revoke the credential as the owner
+        vm.startPrank(owner);
+        issuer.revokeCredential(TEST_CID);
+        vm.stopPrank();
+        
+        // Verify the credential is now revoked
+        assertTrue(issuer.isRevoked(cidHash), "Credential should be revoked");
+    }
+
+    function test_fail_revokeNonExistentCredential() public {
+        // Try to revoke a credential that doesn't exist
+        vm.startPrank(owner);
+        vm.expectRevert("Credential does not exist");
+        issuer.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+
+    function test_fail_onlyOwnerCanRevoke() public {
+        // First, issue a credential as the user
+        vm.startPrank(user);
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1))
+        );
+        
+        // Issue the credential
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+        vm.stopPrank();
+        
+        // Try to revoke as non-owner - should revert
+        vm.startPrank(nonOwner);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, nonOwner));
+        issuer.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+
+    function test_fail_revokeAlreadyRevokedCredential() public {
+        // First, issue a credential as the user
+        vm.startPrank(user);
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1))
+        );
+        
+        // Issue the credential
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+        vm.stopPrank();
+        
+        // Revoke the credential as owner
+        vm.startPrank(owner);
+        issuer.revokeCredential(TEST_CID);
+        
+        // Try to revoke the same credential again - should revert
+        vm.expectRevert("Credential already revoked");
+        issuer.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+
+    function test_setMirrorContract() public {
+        address newMirrorContract = makeAddr("newMirrorContract");
+        
+        // Set mirror contract as owner
+        vm.startPrank(owner);
+        issuer.setMirrorContract(newMirrorContract);
+        vm.stopPrank();
+        
+        // Verify the mirror contract was set
+        assertEq(issuer.targetMirrorContract(), newMirrorContract, "Mirror contract should be set");
+    }
+
+    function test_fail_setMirrorContractZeroAddress() public {
+        // Try to set mirror contract to zero address
+        vm.startPrank(owner);
+        vm.expectRevert("Cannot set mirror to the zero address");
+        issuer.setMirrorContract(address(0));
+        vm.stopPrank();
+    }
+
+    function test_fail_onlyOwnerCanSetMirrorContract() public {
+        address newMirrorContract = makeAddr("newMirrorContract");
+        
+        // Try to set mirror contract as non-owner
+        vm.startPrank(nonOwner);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, nonOwner));
+        issuer.setMirrorContract(newMirrorContract);
+        vm.stopPrank();
+    }
+
+    function test_events() public {
+        // Start acting as the user
+        vm.startPrank(user);
+        
+        // Mock the wormhole message fee
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.messageFee.selector),
+            abi.encode(mockWormholeMessageFee())
+        );
+        
+        // Mock the publishMessage call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.publishMessage.selector),
+            abi.encode(uint64(1))
+        );
+        
+        // Expect the events to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit LogCredentialIssued(user, TEST_CID, keccak256(abi.encodePacked(TEST_CID)));
+        
+        vm.expectEmit(false, false, false, true);
+        emit CrossChainMessageEmitted(1);
+        
+        // Issue the credential
+        issuer.issueCredential{value: mockWormholeMessageFee()}(TEST_CID, TEST_CONTENT_HASH);
+        
+        vm.stopPrank();
+        
+        // Test revocation event
+        vm.startPrank(owner);
+        vm.expectEmit(true, false, false, false);
+        emit CredentialRevoked(keccak256(abi.encodePacked(TEST_CID)));
+        
+        // Revoke the credential
+        issuer.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+} 

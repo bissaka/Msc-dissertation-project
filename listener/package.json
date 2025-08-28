@@ -11,6 +11,8 @@
   "description": "",
   "dependencies": {
     "@wormhole-foundation/sdk": "^3.0.3",
+    "@wormhole-foundation/sdk-evm": "^3.3.0",
+    "@wormhole-foundation/sdk-evm-core": "^3.3.0",
     "dotenv": "^17.2.0",
     "ethers": "^6.15.0"
   }

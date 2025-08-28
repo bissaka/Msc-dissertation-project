@@ -1,72 +1,370 @@
 // SPDX-License-Identifier: MIT
-// I'm defining the license for this test contract.
 pragma solidity ^0.8.20;
-// I'm specifying the Solidity compiler version.
 
-// I'm importing the Foundry Test base contract for its testing utilities.
 import "forge-std/Test.sol";
-// I'm importing the updated Mirror contract that I want to test.
 import "../src/Mirror.sol";
+import "../src/interfaces/IWormhole.sol";
 
-/**
- * @title MirrorTest
- * @author Oludoyi Olumide Joshua
- * @notice This is my updated test suite for the revised Mirror.sol contract.
- * I'm testing its ability to securely receive mirrored credential data.
- */
 contract MirrorTest is Test {
-    // I'm declaring a state variable to hold the instance of the Mirror contract.
-    Mirror private mirror;
+    Mirror public mirror;
+    address public wormholeCoreBridge;
+    address public sourceContract; // The Issuer contract on Sepolia
+    address public owner;
+    address public user;
+    address public originalIssuer;
 
-    // I'm defining the official Wormhole Relayer address for Polygon Amoy.
-    address private constant WORMHOLE_RELAYER = 0x80624d6657314502777f155762F53835265b6878;
-    // I'm defining a fake address to represent an unauthorized caller.
-    address private constant NOT_RELAYER = address(0x1234);
-    // I'm defining a fake address to represent the original issuer from Ethereum.
-    address private constant ORIGINAL_ISSUER = address(0xABCD);
+    // Test data
+    string public constant TEST_CID = "QmExampleCID123456789";
+    bytes32 public constant TEST_CID_HASH = keccak256(abi.encodePacked("QmExampleCID123456789"));
 
-    // I'm declaring a test CID that I'll hash in my tests.
-    string private constant TEST_CID = "QmTestCIDPolygon123456";
+    // Mock VAA data
+    bytes public mockVAA;
+    bytes32 public mockVAAHash;
 
-    /**
-     * @notice This is my setup function, which runs before each test.
-     * It ensures each test starts with a fresh contract instance.
-     */
+    event CredentialReceived(address indexed originalIssuer, bytes32 indexed cidHash);
+    event CredentialRevoked(bytes32 indexed cidHash);
+
     function setUp() public {
-        // I'm deploying a new instance of the Mirror contract.
-        mirror = new Mirror();
-    }
-
-    /**
-     * @notice I'm testing that receiveMessage correctly stores the issuer's address when called by the official relayer.
-     */
-    function test_receiveMessage_byRelayer_storesIssuerAddress() public {
-        // I'm calculating the keccak256 hash of my test CID string.
-        bytes32 cidHash = keccak256(abi.encodePacked(TEST_CID));
+        // Setup addresses
+        owner = address(this);
+        user = makeAddr("user");
+        originalIssuer = makeAddr("originalIssuer");
         
-        // I'm using vm.prank to simulate the transaction coming from the authorized Wormhole Relayer address.
-        vm.prank(WORMHOLE_RELAYER);
-        // I'm calling receiveMessage with the original issuer's address and the CID hash.
-        mirror.receiveMessage(ORIGINAL_ISSUER, cidHash);
-
-        // I'm retrieving the stored issuer address from the public 'cidIssuer' mapping.
-        address storedIssuer = mirror.cidIssuer(cidHash);
-        // I'm asserting that the stored address matches the original issuer's address I sent.
-        assertEq(storedIssuer, ORIGINAL_ISSUER, "Mirror: Issuer address should be stored for the given CID hash.");
+        // Mock addresses
+        wormholeCoreBridge = makeAddr("wormholeCoreBridge");
+        sourceContract = makeAddr("sourceContract");
+        
+        // Deploy the Mirror contract
+        mirror = new Mirror(wormholeCoreBridge, sourceContract, owner);
+        
+        // Create mock VAA payload
+        bytes memory payload = abi.encode(originalIssuer, TEST_CID_HASH);
+        
+        // Create mock VAA (simplified structure for testing)
+        mockVAA = abi.encode(
+            uint8(1),           // version
+            uint32(1),          // timestamp
+            uint32(1),          // nonce
+            uint16(10002),      // emitterChainId (Sepolia)
+            bytes32(uint256(uint160(sourceContract))), // emitterAddress
+            uint64(1),          // sequence
+            uint8(1),           // consistencyLevel
+            payload             // payload
+        );
+        
+        // Calculate VAA hash for replay protection testing
+        mockVAAHash = keccak256(mockVAA);
+        
+        // Give some ETH to the user for testing
+        vm.deal(user, 100 ether);
     }
 
-    /**
-     * @notice I'm testing the security of my contract by ensuring receiveMessage reverts if called by an unauthorized address.
-     */
-    function test_receiveMessage_byNonRelayer_reverts() public {
-        // I'm calculating the hash of the CID for the test.
-        bytes32 cidHash = keccak256(abi.encodePacked(TEST_CID));
+    function test_receiveAndVerifyVAA() public {
+        // Create a mock VM struct that will be returned by parseAndVerifyVM
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002, // Sepolia chain ID
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
 
-        // I'm using vm.prank to simulate the call coming from an unauthorized address.
-        vm.prank(NOT_RELAYER);
-        // I'm telling the test runner to expect the next call to revert with my specific error message.
-        vm.expectRevert(bytes("Mirror: Caller is not the Wormhole Relayer"));
-        // I'm calling receiveMessage with test data; this call should fail as expected.
-        mirror.receiveMessage(ORIGINAL_ISSUER, cidHash);
+        // Mock the parseAndVerifyVM call to return valid VM and true
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "") // valid = true, reason = ""
+        );
+
+        // Expect the CredentialReceived event
+        vm.expectEmit(true, false, false, true);
+        emit CredentialReceived(originalIssuer, TEST_CID_HASH);
+
+        // Call receiveAndVerifyVAA
+        mirror.receiveAndVerifyVAA(mockVAA);
+
+        // Verify the credential was recorded correctly
+        assertEq(mirror.cidIssuer(TEST_CID_HASH), originalIssuer, "CID issuer should be set to original issuer");
+        assertFalse(mirror.isRevoked(TEST_CID_HASH), "Credential should not be revoked initially");
     }
-}
+
+    function test_fail_receiveDuplicateVAA() public {
+        // Create a mock VM struct
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        // Mock the parseAndVerifyVM call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "")
+        );
+
+        // First call should succeed
+        mirror.receiveAndVerifyVAA(mockVAA);
+
+        // Second call with the same VAA should revert
+        vm.expectRevert("VAA already processed");
+        mirror.receiveAndVerifyVAA(mockVAA);
+    }
+
+    function test_fail_receiveVAAFromUntrustedSource() public {
+        // Create a mock VM struct with untrusted source
+        address untrustedSource = makeAddr("untrustedSource");
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(untrustedSource))), // Different source
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        // Mock the parseAndVerifyVM call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "")
+        );
+
+        // Call should revert due to untrusted source
+        vm.expectRevert("Untrusted source contract");
+        mirror.receiveAndVerifyVAA(mockVAA);
+    }
+
+    function test_fail_receiveVAAFromWrongChain() public {
+        // Create a mock VM struct with wrong chain ID
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10007, // Wrong chain ID (Amoy instead of Sepolia)
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        // Mock the parseAndVerifyVM call
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "")
+        );
+
+        // Call should revert due to wrong chain
+        vm.expectRevert("Invalid source chain");
+        mirror.receiveAndVerifyVAA(mockVAA);
+    }
+
+    function test_fail_receiveInvalidVAA() public {
+        // Mock the parseAndVerifyVM call to return invalid VAA
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(IWormhole.VM({
+                version: 1,
+                timestamp: 1,
+                nonce: 1,
+                emitterChainId: 10002,
+                emitterAddress: bytes32(uint256(uint160(sourceContract))),
+                sequence: 1,
+                consistencyLevel: 1,
+                payload: abi.encode(originalIssuer, TEST_CID_HASH)
+            }), false, "Invalid signature") // valid = false
+        );
+
+        // Call should revert due to invalid VAA
+        vm.expectRevert("Invalid VAA");
+        mirror.receiveAndVerifyVAA(mockVAA);
+    }
+
+    function test_revokeCredential() public {
+        // First, receive a VAA to create a credential
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "")
+        );
+
+        mirror.receiveAndVerifyVAA(mockVAA);
+
+        // Verify the credential exists and is not revoked
+        assertEq(mirror.cidIssuer(TEST_CID_HASH), originalIssuer, "Credential should exist");
+        assertFalse(mirror.isRevoked(TEST_CID_HASH), "Credential should not be revoked initially");
+
+        // Now revoke the credential as the owner
+        vm.startPrank(owner);
+        
+        // Expect the CredentialRevoked event
+        vm.expectEmit(true, false, false, false);
+        emit CredentialRevoked(TEST_CID_HASH);
+        
+        mirror.revokeCredential(TEST_CID);
+        vm.stopPrank();
+
+        // Verify the credential is now revoked
+        assertTrue(mirror.isRevoked(TEST_CID_HASH), "Credential should be revoked");
+    }
+
+    function test_fail_revokeNonExistentCredential() public {
+        // Try to revoke a credential that doesn't exist
+        vm.startPrank(owner);
+        vm.expectRevert("Credential does not exist");
+        mirror.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+
+    function test_fail_onlyOwnerCanRevoke() public {
+        // First, receive a VAA to create a credential
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "")
+        );
+
+        mirror.receiveAndVerifyVAA(mockVAA);
+
+        // Try to revoke as non-owner - should revert
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
+        mirror.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+
+    function test_fail_revokeAlreadyRevokedCredential() public {
+        // First, receive a VAA to create a credential
+        IWormhole.VM memory mockVM = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM, true, "")
+        );
+
+        mirror.receiveAndVerifyVAA(mockVAA);
+
+        // Revoke the credential as owner
+        vm.startPrank(owner);
+        mirror.revokeCredential(TEST_CID);
+
+        // Try to revoke the same credential again - should revert
+        vm.expectRevert("Credential already revoked");
+        mirror.revokeCredential(TEST_CID);
+        vm.stopPrank();
+    }
+
+    function test_contractState() public {
+        // Test contract state variables
+        assertEq(mirror.SOURCE_CHAIN_ID(), 10002, "Source chain ID should be Sepolia");
+        assertEq(mirror.trustedSourceContract(), bytes32(uint256(uint160(sourceContract))), "Trusted source should be set");
+        assertEq(mirror.owner(), owner, "Owner should be set correctly");
+    }
+
+    function test_multipleVAAs() public {
+        // Test processing multiple VAAs with different CIDs
+        string memory testCid2 = "QmExampleCID987654321";
+        bytes32 testCidHash2 = keccak256(abi.encodePacked(testCid2));
+        address originalIssuer2 = makeAddr("originalIssuer2");
+
+        // Create second VAA
+        bytes memory mockVAA2 = abi.encode(
+            uint8(1),
+            uint32(2),
+            uint32(2),
+            uint16(10002),
+            bytes32(uint256(uint160(sourceContract))),
+            uint64(2),
+            uint8(1),
+            abi.encode(originalIssuer2, testCidHash2)
+        );
+
+        // Mock first VAA
+        IWormhole.VM memory mockVM1 = IWormhole.VM({
+            version: 1,
+            timestamp: 1,
+            nonce: 1,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 1,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer, TEST_CID_HASH)
+        });
+
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA),
+            abi.encode(mockVM1, true, "")
+        );
+
+        // Mock second VAA
+        IWormhole.VM memory mockVM2 = IWormhole.VM({
+            version: 1,
+            timestamp: 2,
+            nonce: 2,
+            emitterChainId: 10002,
+            emitterAddress: bytes32(uint256(uint160(sourceContract))),
+            sequence: 2,
+            consistencyLevel: 1,
+            payload: abi.encode(originalIssuer2, testCidHash2)
+        });
+
+        vm.mockCall(
+            wormholeCoreBridge,
+            abi.encodeWithSelector(IWormhole.parseAndVerifyVM.selector, mockVAA2),
+            abi.encode(mockVM2, true, "")
+        );
+
+        // Process both VAAs
+        mirror.receiveAndVerifyVAA(mockVAA);
+        mirror.receiveAndVerifyVAA(mockVAA2);
+
+        // Verify both credentials were recorded
+        assertEq(mirror.cidIssuer(TEST_CID_HASH), originalIssuer, "First credential should be recorded");
+        assertEq(mirror.cidIssuer(testCidHash2), originalIssuer2, "Second credential should be recorded");
+    }
+} 
