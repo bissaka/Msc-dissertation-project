@@ -155,12 +155,14 @@ You will need to run three separate processes in three different terminals from 
 
 Terminal 1: Start the Backend Server
 ```bash
-node backend/server.js
+cd backend
+node server.js
 ```
 
 Terminal 2: Start the Wormhole Listener
 ```bash
-node listener/listener.js
+cd listener
+node listener.js
 ```
 
 Terminal 3: Serve the Frontend
