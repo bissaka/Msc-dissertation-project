@@ -60,7 +60,7 @@ Follow these instructions to set up and run the project locally. The project is 
 
 ### 1. Project Setup
 
-Clone the repository and install the dependencies for the `backend` and `listener` services:
+Clone the repository and install the dependencies for the `backend` and `listener` services. Foundry will be installed as well:
 
 ```bash
 git clone <repository-url>
@@ -75,6 +75,11 @@ cd ..
 cd listener
 npm install
 cd ..
+
+# Install Foundry
+cd contracts
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 ```
 
 2. Environment Variables
