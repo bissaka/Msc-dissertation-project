@@ -79,7 +79,16 @@ cd ..
 # Install Foundry
 cd contracts
 curl -L https://foundry.paradigm.xyz | bash
+
 foundryup
+
+forge install
+
+cd lib
+git clone https://github.com/foundry-rs/forge-std
+
+git clone https://github.com/openzeppelin/openzeppelin-contracts
+cd ..
 ```
 
 2. Environment Variables
@@ -107,6 +116,8 @@ SEPOLIA_RPC_URL="YOUR_SEPOLIA_RPC_URL"
 AMOY_RPC_URL="YOUR_AMOY_RPC_URL"
 PRIVATE_KEY_SEPOLIA="YOUR_SEPOLIA_DEPLOYER_PRIVATE_KEY"
 PRIVATE_KEY_AMOY="YOUR_AMOY_DEPLOYER_PRIVATE_KEY"
+ETHERSCAN_API_KEY="YOUR_ETHERSCAN_API_KEY"
+POLYGONSCAN_API_KEY="YOUR_POLYGONSCAN_API_KEY"
 ```
 
 3. Smart Contract Deployment and Linking
