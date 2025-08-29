@@ -2,8 +2,8 @@
 // constants.js - Shared constants for the credential verification system
 
 // --- Contract Addresses ---
-export const ISSUER_ADDRESS = "0x50d71584A91daEE2Fdc389ea755A98b9b581EC74"; // Ethereum Sepolia
-export const MIRROR_ADDRESS = "0x671BedE495cC58a39F2d411677A9384B375B83Fd"; // Polygon Amoy
+export const ISSUER_ADDRESS = "YOUR_ISSUER_CONTRACT_ADDRESS"; // Ethereum Sepolia
+export const MIRROR_ADDRESS = "YOUR_MIRROR_CONTRACT_ADDRESS"; // Polygon Amoy
 
 // --- Network Chain IDs ---
 export const SEPOLIA_CHAIN_ID = 11155111;
