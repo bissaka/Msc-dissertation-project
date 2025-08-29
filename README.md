@@ -63,7 +63,7 @@ Follow these instructions to set up and run the project locally. The project is 
 Clone the repository and install the dependencies for the `backend` and `listener` services:
 
 ```bash
-git clone <your-repository-url>
+git clone <repository-url>
 cd <your-repository-folder>
 
 # Install backend dependencies
