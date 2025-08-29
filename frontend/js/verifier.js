@@ -55,13 +55,11 @@ async function checkBlockchain(network, cid) {
   const provider = new ethers.providers.Web3Provider(window.ethereum);
   const currentNetwork = await provider.getNetwork();
 
-  // ==================== ADD THIS ENHANCED LOG ====================
   console.log("--- NETWORK VERIFICATION CHECK ---");
   console.log(`Requested Verification On: ${network}`);
   console.log(`Target Network ID: ${targetNetworkId}`);
   console.log(`MetaMask's Current Network ID: ${currentNetwork.chainId}`);
   console.log("------------------------------------");
-  // =============================================================
 
   if (currentNetwork.chainId.toString() !== targetNetworkId.toString()) {
     throw new Error(
