@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
-// institution.js - High-level application workflow for credential issuance
+// institution.js
 
-// Import shared constants
+
 import { SEPOLIA_CHAIN_ID } from "./constants.js";
 
-// Import blockchain functions
+
 import {
   connectToWallet,
   getIssuerContract,
@@ -12,10 +12,10 @@ import {
   batchIssueCredentials,
 } from "./blockchain.js";
 
-// Import services
+
 import { encryptFile, uploadToIPFS } from "./services.js";
 
-// Import UI functions
+
 import {
   initializeInstitutionUI,
   getFileFromInput,
