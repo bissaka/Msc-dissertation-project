@@ -53,9 +53,4 @@ module.exports = {
     '/coverage/'
   ],
   
-  // Watch plugins (commented out - install jest-watch-typeahead if needed)
-  // watchPlugins: [
-  //   'jest-watch-typeahead/filename',
-  //   'jest-watch-typeahead/testname'
-  // ]
 }; 
