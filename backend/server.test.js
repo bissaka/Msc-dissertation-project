@@ -16,15 +16,15 @@ const multer = require('multer');
 const cors = require('cors');
 const stream = require('stream');
 
-// Mock the Pinata SDK to avoid actual API calls during testing
+
 jest.mock('@pinata/sdk');
 
-// Mock dotenv to avoid loading actual environment variables
+
 jest.mock('dotenv', () => ({
   config: jest.fn()
 }));
 
-// Mock console methods to avoid cluttering test output
+
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
@@ -33,7 +33,7 @@ describe('Backend Server Tests', () => {
   let server;
   let mockPinata;
 
-  // Test data constants following DRY principle
+  
   const TEST_FILE = {
     originalname: 'test-document.pdf',
     buffer: Buffer.from('test file content'),
@@ -49,25 +49,25 @@ describe('Backend Server Tests', () => {
   };
 
   beforeAll(() => {
-    // Suppress console output during tests
+    
     console.log = jest.fn();
     console.error = jest.fn();
   });
 
   afterAll(() => {
-    // Restore console methods
+    
     console.log = originalConsoleLog;
     console.error = originalConsoleError;
   });
 
   beforeEach(() => {
-    // Reset all mocks before each test
+    
     jest.clearAllMocks();
     
-    // Create a fresh Express app for each test
+    
     app = express();
     
-    // Configure CORS with the same options as the original server
+    
     const corsOptions = {
       origin: [
         'http://127.0.0.1:5500',
@@ -81,17 +81,17 @@ describe('Backend Server Tests', () => {
     };
     app.use(cors(corsOptions));
 
-    // Configure multer for file uploads
+    
     const storage = multer.memoryStorage();
     const upload = multer({ storage: storage });
 
-    // Mock Pinata SDK
+    
     mockPinata = {
       pinFileToIPFS: jest.fn()
     };
     require('@pinata/sdk').mockImplementation(() => mockPinata);
 
-    // Define the upload endpoint (same logic as original server)
+    
     app.post("/upload", upload.single("file"), async (req, res) => {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded." });
@@ -113,12 +113,12 @@ describe('Backend Server Tests', () => {
       }
     });
 
-    // Start the server on a random port
+    
     server = app.listen(0);
   });
 
   afterEach(() => {
-    // Clean up server after each test
+    
     if (server) {
       server.close();
     }
@@ -163,7 +163,7 @@ describe('Backend Server Tests', () => {
         ];
 
         for (const testCase of testCases) {
-          // Reset mock for each iteration
+          
           mockPinata.pinFileToIPFS.mockResolvedValue(MOCK_PINATA_RESPONSE);
 
           // Act: Send file upload request
@@ -215,7 +215,7 @@ describe('Backend Server Tests', () => {
         });
         expect(response.headers['content-type']).toMatch(/application\/json/);
 
-        // Verify Pinata was not called
+        
         expect(mockPinata.pinFileToIPFS).not.toHaveBeenCalled();
       });
 
@@ -322,11 +322,10 @@ describe('Backend Server Tests', () => {
            .attach('file', TEST_FILE.buffer, TEST_FILE.originalname);
 
          // Assert: Verify CORS headers are not set for unauthorized origins
-         // Note: CORS middleware may still process the request but won't set allow-origin header
+         
          expect(response.headers['access-control-allow-origin']).not.toBe(origin);
          
-         // The request might still succeed (200) but without proper CORS headers
-         // This is a more realistic test of CORS behavior
+         
          if (response.status === 200) {
            expect(response.headers['access-control-allow-origin']).toBeUndefined();
          }
@@ -342,12 +341,12 @@ describe('Backend Server Tests', () => {
          .set('Access-Control-Request-Headers', 'content-type');
 
        // Assert: Verify CORS headers are present for preflight requests
-       // The exact status code may vary depending on CORS middleware implementation
+       
        expect(response.headers['access-control-allow-origin']).toBe('http://127.0.0.1:5500');
        expect(response.headers['access-control-allow-methods']).toContain('POST');
        expect(response.headers['access-control-allow-headers']).toContain('content-type');
        
-       // Status should be either 200 (handled by CORS) or 404 (no handler)
+       
        expect([200, 204, 404]).toContain(response.status);
      });
   });
@@ -365,7 +364,7 @@ describe('Backend Server Tests', () => {
       // Assert: Verify file metadata is preserved
       expect(response.status).toBe(200);
       
-      // Verify Pinata was called with correct metadata
+      
       const pinataCall = mockPinata.pinFileToIPFS.mock.calls[0];
       expect(pinataCall[1].pinataMetadata.name).toBe(TEST_FILE.originalname);
     });
@@ -407,7 +406,7 @@ describe('Backend Server Tests', () => {
         expect(response.body.cid).toBe(MOCK_CID);
       });
 
-      // Verify Pinata was called for each request
+      
       expect(mockPinata.pinFileToIPFS).toHaveBeenCalledTimes(5);
     });
 
