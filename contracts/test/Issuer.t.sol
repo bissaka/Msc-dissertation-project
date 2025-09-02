@@ -17,7 +17,7 @@ contract IssuerTest is Test {
     string public constant TEST_CID_2 = "QmExampleCID987654321";
     string public constant TEST_CID_3 = "QmExampleCID555666777";
 
-    // NEW: Test content hashes
+    // Test content hashes
     bytes32 public constant TEST_CONTENT_HASH = keccak256("file1_content");
     bytes32 public constant TEST_CONTENT_HASH_2 = keccak256("file2_content");
     bytes32 public constant TEST_CONTENT_HASH_3 = keccak256("file3_content");
