@@ -11,19 +11,19 @@ export async function encryptFile(file, key) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      // 1. Generate a random salt for each encryption
+      
       const salt = CryptoJS.lib.WordArray.random(128 / 8);
 
-      // 2. Derive a key from the password using PBKDF2
+      
       const derivedKey = CryptoJS.PBKDF2(key, salt, {
         keySize: 256 / 32,
         iterations: 10000 // A higher number makes it slower
       });
 
-      // 3. Encrypt the file content with the derived key
+      
       const encrypted = CryptoJS.AES.encrypt(e.target.result, derivedKey.toString());
 
-      // 4. Combine salt and ciphertext to be stored together
+      
       const combinedData = salt.toString() + encrypted.toString();
 
       const encryptedBlob = new Blob([combinedData], { type: "text/plain" });
@@ -69,18 +69,18 @@ export async function fetchAndDecryptFile(cid, decryptionKey) {
   }
   const combinedData = await response.text();
 
-  // 1. Extract the salt and the ciphertext
-  // The salt is 32 hex characters (16 bytes * 2 chars/byte)
+  
+  
   const salt = CryptoJS.enc.Hex.parse(combinedData.substring(0, 32));
   const encryptedText = combinedData.substring(32);
 
-  // 2. Re-derive the same key using the password and the extracted salt
+  
   const derivedKey = CryptoJS.PBKDF2(decryptionKey, salt, {
     keySize: 256 / 32,
     iterations: 10000
   });
 
-  // 3. Decrypt the content with the derived key
+  
   const decryptedBytes = CryptoJS.AES.decrypt(encryptedText, derivedKey.toString());
   const decryptedDataUrl = decryptedBytes.toString(CryptoJS.enc.Utf8);
 
