@@ -2,37 +2,37 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- Set the character encoding for the document -->
+    
     <meta charset="UTF-8" />
-    <!-- Set the viewport for responsive design -->
+    
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Set the page title -->
-    <title>Florence Bank - Verify Credential</title>
-    <!-- Link to the shared CSS file for consistent styling -->
+    
+    <title>Verify Credential</title>
+    
     <link rel="stylesheet" href="css/style.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   </head>
   <body>
-    <!-- Main container to center and wrap the content -->
+    
     <div class="container">
-      <!-- Heading for the page -->
+      
       <h1>Verify Credential</h1>
-      <!-- Text input for the user to paste the IPFS CID -->
+      
       <input
         type="text"
         id="cidInput"
         placeholder="Paste IPFS CID here"
         style="width: 100%; margin-bottom: 12px"
       />
-      <!-- Button to verify on Ethereum -->
+      
       <button id="verifyEthBtn">Verify on Ethereum</button>
-      <!-- Button to verify on Polygon -->
+      
       <button id="verifyPolyBtn" style="margin-left: 8px">
         Verify on Polygon
       </button>
-      <!-- Paragraph to display status messages to the user -->
+      
       <p id="status"></p>
-      <!-- Display area for the credential file (image or PDF) -->
+      
       <iframe
         id="credentialDisplay"
         style="
@@ -47,15 +47,15 @@
     </div>
     <!-- Include ethers.js from a CDN for blockchain interactions -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-    <!-- Load shared constants as a module -->
+    
     <script type="module" src="js/constants.js"></script>
-    <!-- Load blockchain functions as a module -->
+    
     <script type="module" src="js/blockchain.js"></script>
-    <!-- Load services as a module -->
+    
     <script type="module" src="js/services.js"></script>
-    <!-- Load UI functions as a module -->
+    
     <script type="module" src="js/ui.js"></script>
-    <!-- Link to the external JavaScript file for UI logic -->
+    
     <script type="module" src="js/verifier.js"></script>
   </body>
 </html>
