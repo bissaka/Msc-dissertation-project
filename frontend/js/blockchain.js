@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-// blockchain.js - Centralized blockchain interactions
+
 
 import {
   ISSUER_ADDRESS,
@@ -92,11 +92,11 @@ export async function batchIssueCredentials(signer, cids, contentHashes) {
   const issuerContract = getIssuerContract(signer);
   const coreBridge = getCoreBridgeContract(signer.provider);
 
-  // Get the message fee and calculate total cost
+  
   const messageFee = await coreBridge.messageFee();
   const totalCost = messageFee.mul(cids.length);
 
-  // Call the batch issuance function with content hashes
+  
   const tx = await issuerContract.batchIssueCredentials(cids, contentHashes, { value: totalCost });
   return await tx.wait();
 } 
