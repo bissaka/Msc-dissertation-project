@@ -1,91 +1,91 @@
-/* This CSS file styles the issuing institution's credential UI. */
+/* This CSS file style */
 
-/* Apply a background color and set font for the whole page */
+
 body {
-    /* Use a light blue background for trust and calmness */
+    
     background: #eaf6fb;
-    /* Set a clean, modern font */
+    
     font-family: 'Segoe UI', Arial, sans-serif;
-    /* Remove default margin */
+    
     margin: 0;
-    /* Make the page take full height */
+    
     min-height: 100vh;
 }
 
 /* Center the main container both vertically and horizontally */
 .container {
-    /* Set a max width for the content */
+    
     max-width: 400px;
-    /* Center horizontally */
+    
     margin: 80px auto 0 auto;
-    /* Add padding for space inside the box */
+    
     padding: 32px 24px 24px 24px;
-    /* Add a white background for contrast */
+    
     background: #fff;
-    /* Rounded corners for a modern look */
+    
     border-radius: 12px;
-    /* Subtle box shadow for depth */
+    
     box-shadow: 0 4px 24px rgba(0, 64, 128, 0.08);
-    /* Center text inside the container */
+    
     text-align: center;
 }
 
 /* Style the heading */
 h1 {
-    /* Use Florence Bank's blue for the heading */
+    
     color: #1a4e8a;
-    /* Add some space below the heading */
+    
     margin-bottom: 24px;
-    /* Set font size */
+    
     font-size: 2rem;
 }
 
 /* Style the file input */
 input[type="file"] {
-    /* Add some space below the input */
+    
     margin-bottom: 16px;
-    /* Make the input take full width */
+    
     width: 100%;
 }
 
 /* Style the button */
 button {
-    /* Use Florence Bank's green for the button */
+    
     background: #2ecc71;
-    /* White text for contrast */
+    
     color: #fff;
-    /* Remove border */
+    
     border: none;
-    /* Add padding for a larger click area */
+    
     padding: 12px 24px;
-    /* Rounded corners */
+    
     border-radius: 6px;
-    /* Set font size */
+    
     font-size: 1rem;
-    /* Add a little shadow */
+    
     box-shadow: 0 2px 8px rgba(44, 204, 113, 0.08);
-    /* Cursor pointer on hover */
+    
     cursor: pointer;
-    /* Transition for smooth hover effect */
+    
     transition: background 0.2s;
 }
 
 /* Button hover effect */
 button:hover {
-    /* Slightly darker green on hover */
+    
     background: #27ae60;
 }
 
 /* Style the status message */
 #status {
-    /* Add space above the status */
+    
     margin-top: 18px;
-    /* Use a dark gray for readability */
+    
     color: #333;
-    /* Set font size */
+    
     font-size: 1rem;
-    /* Minimum height to prevent layout shift */
+    
     min-height: 24px;
-    /* Word break for long messages */
+    
     word-break: break-word;
 } 
