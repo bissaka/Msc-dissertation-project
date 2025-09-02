@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-// institution.js
+
 
 
 import { SEPOLIA_CHAIN_ID } from "./constants.js";
@@ -29,7 +29,7 @@ import {
   confirmBatchIssuance,
 } from "./ui.js";
 
-// Initialize UI elements
+
 initializeInstitutionUI();
 
 /**
@@ -53,7 +53,7 @@ function readFileAsBytes(file) {
 // --- Main Click Handlers ---
 issueBtn.addEventListener("click", async () => {
   try {
-    // This check ensures only one file is processed for single issuance.
+    
     if (getAllFilesFromInput().length > 1) {
       throw new Error(
         "Please select only one file for single credential issuance. Use the 'Issue Batch' button for multiple files."
@@ -101,7 +101,7 @@ async function issueOnChain(
   const issuerContract = getIssuerContract(signer);
   const coreBridge = getCoreBridgeContract(signer.provider);
 
-  // Get the cheap message fee from the Core Bridge contract
+  
   const fee = await coreBridge.messageFee();
   updateStatusHTML(
     `Sending transaction with Wormhole fee (${ethers.utils.formatEther(
@@ -109,7 +109,7 @@ async function issueOnChain(
     )} ETH)...`
   );
 
-  // Call the 'issueCredential' function on your contract with content hash
+  
   const tx = await issuerContract.issueCredential(cid, contentHash, {
     value: fee,
   });
@@ -132,7 +132,7 @@ async function issueOnChain(
     <strong>Block:</strong> ${receipt.blockNumber}
   `);
 
-  // Alert the user and prepare data for download
+  
   alert(
     "Credential issued successfully! Your Secret Key File will now be downloaded."
   );
@@ -145,7 +145,7 @@ async function issueOnChain(
     },
   ];
 
-  // Create a unique filename and trigger the download
+  
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const csvFilename = `credential-password-${timestamp}.csv`;
   downloadCSV(credentialData, csvFilename);
@@ -157,41 +157,41 @@ async function issueOnChain(
 async function handleBatchIssuance() {
   updateStatusHTML("Starting batch issuance process...");
 
-  // Step a: Get all selected files
+  
   const files = getAllFilesFromInput();
 
-  // This check ensures at least two files are selected for a batch.
+  
   if (files.length < 2) {
     throw new Error("Please select at least two files for batch issuance.");
   }
 
   updateStatus(`Processing ${files.length} files...`);
 
-  // Step b: Create array to hold credential data
+  
   const batchData = [];
   const cids = [];
   const contentHashes = [];
 
-  // Step c: Loop through each file
+  
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     updateStatus(`Processing file ${i + 1} of ${files.length}: ${file.name}`);
 
     try {
-      // Step c.i: Hash the file content
+      
       const fileBytes = await readFileAsBytes(file);
       const contentHash = ethers.utils.keccak256(fileBytes);
 
-      // Step c.ii: Generate random password
+      
       const password = generateRandomPassword();
 
-      // Step c.iii: Encrypt the file
+      
       const encryptedFile = await encryptFile(file, password);
 
-      // Step c.iv: Upload to IPFS
+      
       const cid = await uploadToIPFS(encryptedFile);
 
-      // Step c.v: Store data in array
+      
       batchData.push({
         filename: file.name,
         ipfs_cid: cid,
@@ -208,10 +208,10 @@ async function handleBatchIssuance() {
     }
   }
 
-  // Step d: Generate CSV string
+  
   updateStatus("Generating secret key file...");
 
-  // Step e: Create downloadable link and trigger download
+  
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `credential-passwords-${timestamp}.csv`;
   downloadCSV(batchData, filename);
@@ -220,10 +220,10 @@ async function handleBatchIssuance() {
     "Secret key file downloaded. Please confirm to proceed with on-chain transaction."
   );
 
-  // Step f: Confirm with user
+  
   const userConfirmed = confirmBatchIssuance();
 
-  // Step g: Proceed with on-chain transaction if confirmed
+  
   if (userConfirmed) {
     updateStatus("User confirmed. Proceeding with on-chain transaction...");
     const signer = await connectToWallet(SEPOLIA_CHAIN_ID);
