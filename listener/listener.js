@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-// listener.js - Final Polling Version with State Management
+
 
 require("dotenv").config();
 const { ethers } = require("ethers");
@@ -29,7 +29,7 @@ const MIRROR_ABI = [
   },
 ];
 
-// --- Helper Functions ---
+
 
 function getEmitterAddressEth(address) {
   return "0x" + address.slice(2).padStart(64, "0");
@@ -39,8 +39,8 @@ async function fetchVAAWithRetry(chainId, emitterAddress, sequence) {
   const vaaUrl = `https://api.testnet.wormholescan.io/api/v1/vaas/${chainId}/${emitterAddress.slice(
     2
   )}/${sequence}`;
-  const maxAttempts = 60; // 30 minutes total timeout
-  const delayMs = 30000; // 30 seconds
+  const maxAttempts = 60; 
+  const delayMs = 30000; 
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     console.log(
@@ -84,9 +84,9 @@ async function relayVAA(vaaBytes, mirrorContract, sequence) {
     );
     console.log(`[END] Polygon Tx Confirmed: ${new Date().toISOString()}`);
     console.log(`   - Amoy Tx Hash: ${receipt.hash}`);
-    return true; // Indicate success
+    return true; 
   } catch (error) {
-    // This is not a real error, it just means another instance of the listener succeeded first.
+    
     if (
       error.message.includes("already known") ||
       error.message.includes("VAA already processed")
@@ -94,14 +94,14 @@ async function relayVAA(vaaBytes, mirrorContract, sequence) {
       console.log(
         `\n✅ Sequence ${sequence} was already relayed by another process.`
       );
-      return true; // Indicate success
+      return true; 
     }
-    // This is a real error
+    
     console.error(
       `\n❌ An error occurred during the relay for sequence ${sequence}:`
     );
     console.error(error.message);
-    return false; // Indicate failure
+    return false; 
   }
 }
 
@@ -134,7 +134,7 @@ async function main() {
   console.log(`🪞 Mirror contract on Amoy: ${MIRROR_ADDRESS}`);
 
   let lastCheckedBlock = await sepoliaProvider.getBlockNumber();
-  const currentlyProcessing = new Set(); // This will prevent duplicate processing
+  const currentlyProcessing = new Set(); 
 
   console.log(
     `✅ Listener active. Starting scan from block ${lastCheckedBlock}.`
@@ -190,7 +190,7 @@ async function main() {
         error.message
       );
     } finally {
-      // Always reschedule the next poll, even if an error occurred.
+      
       setTimeout(pollAndReschedule, 30000);
       console.log(
         `\n...waiting for next poll in 30s. Last checked block: ${lastCheckedBlock}`
@@ -198,7 +198,7 @@ async function main() {
     }
   };
 
-  // Start the first poll
+  
   pollAndReschedule();
 }
 
