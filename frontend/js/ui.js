@@ -156,15 +156,15 @@ export function promptForEncryptionPassword() {
     );
 
     if (encryptionKey === null) {
-      // User cancelled the prompt
+      
       throw new Error("Encryption password is required.");
     }
 
     if (strongPasswordRegex.test(encryptionKey)) {
-      // Password is strong, break the loop
+      
       break;
     } else {
-      // Password is not strong, alert the user and loop again
+      
       alert(
         "Password does not meet the strength requirements. Please try again."
       );
