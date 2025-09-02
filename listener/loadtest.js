@@ -4,7 +4,7 @@
 require("dotenv").config();
 const ethers = require("ethers");
 
-// The path needs to go "up" one folder from /listener to the root, then into /frontend/js
+
 const {
   ISSUER_ADDRESS,
   ISSUER_ABI,
@@ -44,11 +44,11 @@ async function runLoadTest() {
     sepoliaProvider
   );
 
-  // Get the Wormhole fee once to reuse it
+  
   const fee = await coreBridge.messageFee();
   console.log(
     `Using a constant Wormhole fee of ${ethers.formatEther(
-      // Ethers v6 syntax
+      
       fee
     )} ETH for all transactions.`
   );
@@ -59,8 +59,8 @@ async function runLoadTest() {
     try {
       const credentialId = `load-test-${i + 1}-${Date.now()}`;
       const contentHash = ethers.keccak256(
-        // Ethers v6 syntax
-        ethers.toUtf8Bytes(credentialId) // Ethers v6 syntax
+        
+        ethers.toUtf8Bytes(credentialId) 
       );
 
       console.log(
@@ -75,7 +75,7 @@ async function runLoadTest() {
 
       console.log(`   ✅ Transaction sent! Hash: ${tx.hash}`);
 
-      // We don't wait for confirmation here to simulate rapid fire, just a delay
+      
       await new Promise((resolve) =>
         setTimeout(resolve, DELAY_BETWEEN_TRANSACTIONS_MS)
       );
