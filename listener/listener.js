@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 
-
 require("dotenv").config();
 const { ethers } = require("ethers");
 const fetch = require("node-fetch");
+const fs = require("fs");
 
 // --- Configuration ---
 const WORMHOLE_CHAIN_ID_SEPOLIA = 10002;
-const ISSUER_ADDRESS = "YOUR_ISSUER_CONTRACT_ADDRESS";
-const MIRROR_ADDRESS = "YOUR_MIRROR_CONTRACT_ADDRESS";
+const ISSUER_ADDRESS = "0x50d71584A91daEE2Fdc389ea755A98b9b581EC74";
+const MIRROR_ADDRESS = "0x671BedE495cC58a39F2d411677A9384B375B83Fd";
+const STATE_FILE = "./listener-state.json";
 
 // --- ABIs ---
 const ISSUER_ABI = [
@@ -16,7 +17,7 @@ const ISSUER_ABI = [
     type: "event",
     name: "CrossChainMessageEmitted",
     inputs: [{ name: "sequence", type: "uint64", indexed: false }],
-    anonymous: false,
+    anonymous: false, //event
   },
 ];
 const MIRROR_ABI = [
@@ -29,7 +30,24 @@ const MIRROR_ABI = [
   },
 ];
 
+// --- Helper Functions ---
 
+// Function to load the last checked block from our state file
+function loadState(defaultStartBlock) {
+  if (fs.existsSync(STATE_FILE)) {
+    const state = JSON.parse(fs.readFileSync(STATE_FILE));
+    console.log(`Resuming from saved block: ${state.lastCheckedBlock}`);
+    return state.lastCheckedBlock;
+  }
+  console.log(`No state file found. Starting from block: ${defaultStartBlock}`);
+  return defaultStartBlock;
+}
+
+// Function to save the last checked block to our state file
+function saveState(lastCheckedBlock) {
+  const state = { lastCheckedBlock };
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
 
 function getEmitterAddressEth(address) {
   return "0x" + address.slice(2).padStart(64, "0");
@@ -39,8 +57,8 @@ async function fetchVAAWithRetry(chainId, emitterAddress, sequence) {
   const vaaUrl = `https://api.testnet.wormholescan.io/api/v1/vaas/${chainId}/${emitterAddress.slice(
     2
   )}/${sequence}`;
-  const maxAttempts = 60; 
-  const delayMs = 30000; 
+  const maxAttempts = 60;
+  const delayMs = 30000;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     console.log(
@@ -84,9 +102,8 @@ async function relayVAA(vaaBytes, mirrorContract, sequence) {
     );
     console.log(`[END] Polygon Tx Confirmed: ${new Date().toISOString()}`);
     console.log(`   - Amoy Tx Hash: ${receipt.hash}`);
-    return true; 
+    return true;
   } catch (error) {
-    
     if (
       error.message.includes("already known") ||
       error.message.includes("VAA already processed")
@@ -94,14 +111,14 @@ async function relayVAA(vaaBytes, mirrorContract, sequence) {
       console.log(
         `\n✅ Sequence ${sequence} was already relayed by another process.`
       );
-      return true; 
+      return true;
     }
-    
+
     console.error(
       `\n❌ An error occurred during the relay for sequence ${sequence}:`
     );
     console.error(error.message);
-    return false; 
+    return false;
   }
 }
 
@@ -133,56 +150,74 @@ async function main() {
   console.log(`📡 Polling for events on Issuer contract: ${ISSUER_ADDRESS}`);
   console.log(`🪞 Mirror contract on Amoy: ${MIRROR_ADDRESS}`);
 
-  let lastCheckedBlock = await sepoliaProvider.getBlockNumber();
-  const currentlyProcessing = new Set(); 
+  const initialBlock = await sepoliaProvider.getBlockNumber();
+  let lastCheckedBlock = loadState(initialBlock);
+  const currentlyProcessing = new Set(); // This will prevent duplicate processing
 
   console.log(
-    `✅ Listener active. Starting scan from block ${lastCheckedBlock}.`
+    `✅ Listener active. Starting scan from block ${lastCheckedBlock + 1}.`
   );
 
   const pollAndReschedule = async () => {
     try {
       const latestBlock = await sepoliaProvider.getBlockNumber();
       const fromBlock = lastCheckedBlock + 1;
+      const MAX_BLOCK_RANGE = 9;
 
       if (latestBlock >= fromBlock) {
-        const events = await issuerContract.queryFilter(
-          "CrossChainMessageEmitted",
-          fromBlock,
-          latestBlock
-        );
+        console.log(`\nScanning from block ${fromBlock} to ${latestBlock}...`);
 
-        if (events.length > 0) {
-          console.log(`\nFound ${events.length} new event(s)...`);
-          for (const event of events) {
-            const { sequence } = event.args;
-            const sequenceId = sequence.toString();
+        for (
+          let currentBlock = fromBlock;
+          currentBlock <= latestBlock;
+          currentBlock += MAX_BLOCK_RANGE + 1
+        ) {
+          const toBlock = Math.min(currentBlock + MAX_BLOCK_RANGE, latestBlock);
+          console.log(`   - Querying chunk: [${currentBlock}, ${toBlock}]`);
 
-            if (!currentlyProcessing.has(sequenceId)) {
-              currentlyProcessing.add(sequenceId);
-              try {
-                console.log("\n✅ Processing New Cross-Chain Message!");
-                console.log(`   • Sequence:   ${sequenceId}`);
-                console.log(`   • Sepolia tx: ${event.transactionHash}`);
+          const events = await issuerContract.queryFilter(
+            "CrossChainMessageEmitted",
+            currentBlock,
+            toBlock
+          );
 
-                const vaaBytes = await fetchVAAWithRetry(
-                  WORMHOLE_CHAIN_ID_SEPOLIA,
-                  getEmitterAddressEth(issuerContract.target),
-                  sequenceId
-                );
-                await relayVAA(vaaBytes, mirrorContract, sequenceId);
-              } catch (error) {
-                console.error(
-                  `A critical error occurred processing sequence ${sequenceId}:`,
-                  error.message
-                );
-              } finally {
-                currentlyProcessing.delete(sequenceId);
+          if (events.length > 0) {
+            console.log(
+              `\nFound ${events.length} new event(s) in this chunk...`
+            );
+            // Process each event one-by-one, waiting for it to complete.
+            for (const event of events) {
+              const { sequence } = event.args;
+              const sequenceId = sequence.toString();
+
+              if (!currentlyProcessing.has(sequenceId)) {
+                currentlyProcessing.add(sequenceId);
+                try {
+                  console.log("\n✅ Processing New Cross-Chain Message!");
+                  console.log(`   • Sequence:   ${sequenceId}`);
+                  console.log(`   • Sepolia tx: ${event.transactionHash}`);
+
+                  const vaaBytes = await fetchVAAWithRetry(
+                    WORMHOLE_CHAIN_ID_SEPOLIA,
+                    getEmitterAddressEth(issuerContract.target),
+                    sequenceId
+                  );
+                  // The 'await' here ensures we wait for the relay to finish before the loop continues.
+                  await relayVAA(vaaBytes, mirrorContract, sequenceId);
+                } catch (error) {
+                  console.error(
+                    `A critical error occurred processing sequence ${sequenceId}:`,
+                    error.message
+                  );
+                } finally {
+                  currentlyProcessing.delete(sequenceId);
+                }
               }
             }
           }
+          lastCheckedBlock = toBlock;
+          saveState(lastCheckedBlock);
         }
-        lastCheckedBlock = latestBlock;
       }
     } catch (error) {
       console.error(
@@ -190,7 +225,6 @@ async function main() {
         error.message
       );
     } finally {
-      
       setTimeout(pollAndReschedule, 30000);
       console.log(
         `\n...waiting for next poll in 30s. Last checked block: ${lastCheckedBlock}`
@@ -198,7 +232,7 @@ async function main() {
     }
   };
 
-  
+  // Start the first poll
   pollAndReschedule();
 }
 
